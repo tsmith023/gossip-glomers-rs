@@ -4,8 +4,28 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-std = "1.13.0"
 async-trait = "0.1.85"
 maelstrom-node = "0.1.6"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.135", features = ["raw_value"] }
 tokio = "1.43.0"
+
+[dependencies.uuid]
+version = "1.12.0"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+]
+
+[[bin]]
+name = "echo"
+test = false
+bench = false
+path = "src/echo/main.rs"
+
+[[bin]]
+name = "guid-gen"
+test = false
+bench = false
+path = "src/guid-gen/main.rs"
