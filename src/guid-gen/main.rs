@@ -8,33 +8,39 @@ use uuid::Uuid;
 struct GenerateHandler {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
-struct GuidGenMessageBody {
+struct ReplyGenerate {
     /// Message type.
     #[serde(rename = "type", default)]
     pub typ: String,
-
-    #[serde(default)]
-    pub msg_id: u64,
-
-    #[serde(default)]
-    pub in_reply_to: u64,
-
     #[serde(default)]
     pub id: u64,
+}
+
+impl ReplyGenerate {
+    fn with_guid(self, id: u64) -> Self {
+        let mut t = self;
+        t.id = id;
+        t
+    }
+    fn with_type(self, typ: impl Into<String>) -> Self {
+        let mut t = self;
+        t.typ = typ.into();
+        t
+    }
 }
 
 #[async_trait]
 impl Node for GenerateHandler {
     async fn process(&self, runtime: Runtime, req: Message) -> Result<()> {
         if req.get_type() == "generate" {
-            let new = Uuid::new_v4().as_u64_pair();
-            let generate_msg = GuidGenMessageBody {
-                typ: "generate_ok".to_string(),
-                msg_id: new.0,
-                in_reply_to: req.body.msg_id,
-                id: new.0,
-            };
-            return runtime.send(req.src, generate_msg).await;
+            return runtime
+                .send(
+                    req.src,
+                    ReplyGenerate::default()
+                        .with_type("generate_ok")
+                        .with_guid(Uuid::new_v4().as_u64_pair().0),
+                )
+                .await;
         }
         done(runtime, req)
     }

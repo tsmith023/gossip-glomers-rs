@@ -29,3 +29,9 @@ name = "guid-gen"
 test = false
 bench = false
 path = "src/guid-gen/main.rs"
+
+[[bin]]
+name = "broadcast"
+test = false
+bench = false
+path = "src/broadcast/main.rs"
