@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use maelstrom::{protocol::Message, Node, Result, Runtime, done};
+use maelstrom::{done, protocol::Message, Node, Result, Runtime};
 use std::sync::Arc;
 
 #[derive(Clone, Default)]
