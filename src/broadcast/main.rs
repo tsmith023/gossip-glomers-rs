@@ -24,15 +24,11 @@ struct BroadcastReceive {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 struct ReadReply {
     #[serde(default)]
-    pub typ: String,
-    #[serde(default)]
     pub messages: Vec<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 struct TopologyReceive {
-    #[serde(default)]
-    pub typ: String,
     #[serde(default)]
     pub topology: HashMap<String, Vec<String>>,
 }
@@ -43,11 +39,6 @@ impl ReadReply {
         t.messages = msgs.to_vec();
         t
     }
-    fn with_type(self, typ: impl Into<String>) -> Self {
-        let mut t = self;
-        t.typ = typ.into();
-        t
-    }
 }
 
 #[async_trait]
@@ -56,26 +47,17 @@ impl Node for BroadcastHandler {
         if req.get_type() == "broadcast" {
             let body = req.body.as_obj::<BroadcastReceive>()?;
             self.messages.write().await.push(body.message);
-            return runtime
-                .send(req.src, &MessageBody::default().with_type("broadcast_ok"))
-                .await;
+            runtime.reply(req.clone(), &MessageBody::default()).await?;
         }
         if req.get_type() == "read" {
             let msgs = self.messages.read().await;
-            return runtime
-                .send(
-                    req.src,
-                    ReadReply::default()
-                        .with_type("read_ok")
-                        .with_messages(&msgs),
-                )
-                .await;
+            runtime
+                .reply(req.clone(), ReadReply::default().with_messages(&msgs))
+                .await?;
         }
         if req.get_type() == "topology" {
             let _ = req.body.as_obj::<TopologyReceive>()?;
-            return runtime
-                .send(req.src, MessageBody::default().with_type("topology_ok"))
-                .await;
+            runtime.reply(req.clone(), MessageBody::default()).await?;
         }
         done(runtime, req)
     }
