@@ -1,21 +1,20 @@
 use async_std::sync::RwLock;
 use async_trait::async_trait;
-use maelstrom::{
-    done,
-    protocol::{Message, MessageBody},
-    Node, Result, Runtime,
-};
+use maelstrom::{done, protocol::Message, Node, Result, Runtime};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
+
+type Topology = HashMap<String, Vec<String>>;
 
 #[derive(Clone, Default)]
 struct BroadcastHandler {
     messages: Arc<RwLock<Vec<u64>>>,
+    topology: Arc<RwLock<Topology>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 struct BroadcastReceive {
-    #[serde(default)]
+    #[serde(rename = "type")]
     pub typ: String,
     #[serde(default)]
     pub message: u64,
@@ -29,8 +28,10 @@ struct ReadReply {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 struct TopologyReceive {
+    #[serde(rename = "type")]
+    pub typ: String,
     #[serde(default)]
-    pub topology: HashMap<String, Vec<String>>,
+    pub topology: Topology,
 }
 
 impl ReadReply {
@@ -46,8 +47,14 @@ impl Node for BroadcastHandler {
     async fn process(&self, runtime: Runtime, req: Message) -> Result<()> {
         if req.get_type() == "broadcast" {
             let body = req.body.as_obj::<BroadcastReceive>()?;
+            if self.messages.read().await.contains(&body.message) {
+                return runtime.reply_ok(req.clone()).await;
+            }
             self.messages.write().await.push(body.message);
-            runtime.reply(req.clone(), &MessageBody::default()).await?;
+            for node in self.topology.read().await.get(runtime.node_id()).unwrap() {
+                runtime.rpc(node, body.clone()).await?;
+            }
+            runtime.reply_ok(req.clone()).await?;
         }
         if req.get_type() == "read" {
             let msgs = self.messages.read().await;
@@ -56,8 +63,10 @@ impl Node for BroadcastHandler {
                 .await?;
         }
         if req.get_type() == "topology" {
-            let _ = req.body.as_obj::<TopologyReceive>()?;
-            runtime.reply(req.clone(), MessageBody::default()).await?;
+            let body = req.body.as_obj::<TopologyReceive>()?;
+            let mut guard = self.topology.write().await;
+            *guard = body.topology;
+            runtime.reply_ok(req.clone()).await?;
         }
         done(runtime, req)
     }
@@ -105,6 +114,7 @@ mod tests {
     async fn handler_process_read_no_panic() {
         let handler = BroadcastHandler {
             messages: Arc::new(RwLock::new(vec![1])),
+            topology: Arc::new(HashMap::new()),
         };
         let _ = handler
             .process(
